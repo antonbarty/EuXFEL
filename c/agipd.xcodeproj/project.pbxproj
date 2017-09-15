@@ -32,6 +32,7 @@
 		120DBF7E1F69AFDD00C46E75 /* TextManager.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = TextManager.cpp; path = src/TextManager.cpp; sourceTree = SOURCE_ROOT; };
 		120DBF7F1F69AFDD00C46E75 /* TextManager.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = TextManager.h; path = src/TextManager.h; sourceTree = SOURCE_ROOT; };
 		120DBF801F69AFDD00C46E75 /* font.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = font.h; path = src/font.h; sourceTree = SOURCE_ROOT; };
+		12854F261F6B192E00437709 /* cheetah-euxfel.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = "cheetah-euxfel.cpp"; path = "src/cheetah-euxfel.cpp"; sourceTree = SOURCE_ROOT; };
 		4D2113F01F4ED5E90080F5AE /* agipd-reader */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = "agipd-reader"; sourceTree = BUILT_PRODUCTS_DIR; };
 		4D2113FA1F4ED6090080F5AE /* main.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = main.cpp; path = src/main.cpp; sourceTree = SOURCE_ROOT; };
 		4D2113FC1F4ED6530080F5AE /* agipd_module_reader.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = agipd_module_reader.cpp; path = src/agipd_module_reader.cpp; sourceTree = SOURCE_ROOT; };
@@ -72,6 +73,7 @@
 				4D2113FA1F4ED6090080F5AE /* main.cpp */,
 				4D2113FD1F4ED6530080F5AE /* agipd_read.h */,
 				4D26C3441F628EDA00D2D8E0 /* agipd_reader.cpp */,
+				12854F261F6B192E00437709 /* cheetah-euxfel.cpp */,
 				4D2113FC1F4ED6530080F5AE /* agipd_module_reader.cpp */,
 				120DBF7E1F69AFDD00C46E75 /* TextManager.cpp */,
 				120DBF7F1F69AFDD00C46E75 /* TextManager.h */,
