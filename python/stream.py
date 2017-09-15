@@ -29,7 +29,7 @@ class Stream():
         self.good_frames = np.array([self.good_pulses + t for t in range(0, 15000, 60)]).ravel()
         
         # transpose the calib file for easier + faster access
-        self.calib = np.transpose(calib, (3, 0, 2, 1))
+        self.calib = np.transpose(calib, (3, 0, 2, 1)).astype(np.float)
         
         # grab the file names for each of the modules
         self.mod_fnams = self.get_mods(rundir)
@@ -47,7 +47,7 @@ class Stream():
         """
         offset calib[mod, fs, ss, cell no.], cell no. = (i/2)%30
         """
-        return frame - self.calib[index%7]
+        return frame.astype(np.float) - self.calib[index%7]
     
     # make self indexable: self[0] or self[40:100:2] etc
     def __getitem__(self, args):
@@ -91,7 +91,7 @@ class Stream():
 if __name__ == '__main__':
     #calib  = h5py.File('../calibration/small_calibration.h5', 'r')['offsets'][()]
     calib  = h5py.File('/gpfs/exfel/exp/SPB/201701/p002012/scratch/filipe/r0008_calib_small.h5', 'r')['offsets'][()]
-    rundir = '/gpfs/exfel/exp/SPB/201701/p002012/raw/r0006'
+    rundir = '/gpfs/exfel/exp/SPB/201701/p002012/raw/r0005'
     gfnam  = '/gpfs/exfel/u/scratch/SPB/201701/p002012/amorgan/EuXFEL/agipd_hmg2_oy0_man.geom'
     
     # example
