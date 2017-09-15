@@ -110,11 +110,18 @@ public:
 	bool nextFrame();
 	void resetCurrentFrame();
 	void maxAllFrames();
+	float *getCellAverage(int i);
+
+	void writePNG(float *pngData, std::string filename);
 	
 public:
 	// Data slab dimensions
 	long		nframes;
-	
+
+	bool                firstModule;
+	long                currentTrain;
+	long                currentPulse;
+
 	// Dimensions and of the composite data slab
 	long		dims[2];
 	long		n0;
@@ -141,8 +148,13 @@ public:
 
 	int			verbose;
 	bool		rawDetectorData;
-	
-	
+
+	// Individual cells - means for each of the ~30 or whatever cells held here.
+	// Dynamically allocated when number of cells is known
+
+	float **    cellAveData;
+	int **      cellAveCounts;
+
 private:
 	void				generateModuleFilenames(char[]);
 
@@ -156,8 +168,9 @@ private:
 	long                maxTrain;
 	long                minPulse;
 	long                maxPulse;
-	long                currentTrain;
-	long                currentPulse;
+	long                minCell;
+	long                maxCell;
+
 
 	TrainPulseMap       trainPulseMap;
 

@@ -12,6 +12,7 @@
 #include <math.h>
 #include "PNGFile.h"
 #include "agipd_read.h"
+#include <algorithm>
 
 cAgipdReader::cAgipdReader(void){
 	data = NULL;
@@ -24,6 +25,8 @@ cAgipdReader::cAgipdReader(void){
 	maxTrain = 0;
 	minPulse = 0;
 	maxPulse = 0;
+	minCell = 0;
+	maxCell = 0;
 	verbose = 0;
 };
 
@@ -49,7 +52,15 @@ void cAgipdReader::generateModuleFilenames(char *module0filename){
 		pos = moduleFilename[i].find("AGIPD");
 		sprintf(tempstr, "%0.2li", i);
 		moduleFilename[i].replace(pos+5,2,tempstr);
-		
+		pos = moduleFilename[i].find(".h5");
+		long stackPos = pos - 5; /* Position of the stack thing */
+
+		std::string stackNum = moduleFilename[i].substr(stackPos, 5);
+		int stackInt = atoi(stackNum.c_str());
+
+		firstModule = (stackInt == 0);
+		std::cout << "Stack number is first? - " << firstModule << std::endl;
+
 		if(verbose) {
 			printf("\tModule %0.2li = %s\n",i, moduleFilename[i].c_str());
 		}
@@ -78,8 +89,7 @@ void cAgipdReader::open(char *baseFilename){
 		module[i].open((char *) moduleFilename[i].data(), i);
 		module[i].readHeaders();
 	}
-	
-	
+
 	// Det up size and layout of the assembled data stack
 	// Use module[0] as the reference and stack the modules one on top of another
 	nframes = module[0].nframes;
@@ -135,6 +145,8 @@ void cAgipdReader::open(char *baseFilename){
 	}
 
 	std::cout << "\tChecking for mismatched timestamps" << std::endl;
+	std::vector<long> allTrainIDs;
+
 	for(long i=0; i<nAGIPDmodules; i++)
 	{
 		if (moduleOK[i] == false)
@@ -144,8 +156,16 @@ void cAgipdReader::open(char *baseFilename){
 		maxTrain = INT_MIN;
 		minPulse = INT_MAX;
 		maxPulse = INT_MIN;
+		minCell = INT_MAX;
+		maxCell = INT_MIN;
 
-		for(long j=0; j<module[0].nframes; j++)
+		long cellID = module[i].cellID;
+
+		int start = firstModule ? 200 : 0;
+
+		std::cout << "Starting from " << start << std::endl;
+
+		for(long j=start; j<module[0].nframes; j++)
 		{
 			long trainID = module[i].trainIDlist[j];
 			long pulseID = module[i].pulseIDlist[j];
@@ -156,15 +176,19 @@ void cAgipdReader::open(char *baseFilename){
 			if (pulseID < minPulse) minPulse = pulseID;
 			if (pulseID > maxPulse) maxPulse = pulseID;
 
+			if (cellID < minCell) minCell = cellID;
+			if (cellID > maxCell) maxCell = cellID;
 		}
 	}
 
 	currentTrain = minTrain;
+	currentPulse = minPulse;
 
 	std::cout << "Trains extend from IDs " << minTrain << " to " << maxTrain << std::endl;
 	std::cout << "Current train set to minimum, " << minTrain << std::endl;
 	std::cout << "Pulses extend from IDs " << minPulse << " to " << maxPulse << std::endl;
 	std::cout << "Current pulse set to minimum, " << minPulse << std::endl;
+	std::cout << "Cells of module readout extend from IDs " << minCell << " to " << maxCell << std::endl;
 
 	for(long i=1; i<nAGIPDmodules; i++)
 	{
@@ -309,38 +333,16 @@ bool cAgipdReader::readFrame(long trainID, long pulseID)
 	return true;
 }
 
-void cAgipdReader::maxAllFrames(void)
+void cAgipdReader::writePNG(float *pngData, std::string filename)
 {
-	// Array for storying sum of all frames
-	float *sumdata;
-
-	std::cout << "Writing out max of all frames..." << std::endl;
-
-	sumdata = (float*) malloc(nn*sizeof(float));
-	memset(sumdata, 0, sizeof(float)*nn);
-
-	nextFrame();
-	std::cout << "First pixel is: " << data[0] << std::endl;
-	resetCurrentFrame();
-
-	while (nextFrame())
-	{
-		for (int j = 0; j < nn; j++)
-		{
-			if (data[j] > sumdata[j])
-			{
-				sumdata[j] = data[j];
-			}
-		}
-	}
 
 	double sum = 0;
 	double sumSq = 0;
 
 	for (int j = 0; j < nn; j++)
 	{
-		sum += sumdata[j];
-		sumSq += sumdata[j] * sumdata[j];
+		sum += pngData[j];
+		sumSq += pngData[j] * pngData[j];
 	}
 
 	double mean = sum / nn;
@@ -358,7 +360,7 @@ void cAgipdReader::maxAllFrames(void)
 	const int gap = 16;
 
 	const int roughPos[16][2] =
-	   {{xBump, (one + padding) * 3 + 23 + 21 + 21 + gap + slant},
+	{{xBump, (one + padding) * 3 + 23 + 21 + 21 + gap + slant},
 		{xBump, (one + padding) * 2 + 23 + 21 + gap + slant},
 		{xBump, (one + padding) * 1 + 23 + gap + slant},
 		{xBump, (one + padding) * 0 + gap + slant},
@@ -376,7 +378,7 @@ void cAgipdReader::maxAllFrames(void)
 		{xFarLeft, (one + padding) * 0 + gap}};
 
 	const int axisDir[16][2] =
-	   {{-1, -1},
+	{{-1, -1},
 		{-1, -1},
 		{-1, -1},
 		{-1, -1},
@@ -387,7 +389,7 @@ void cAgipdReader::maxAllFrames(void)
 		{+1, +1},
 		{+1, +1},
 		{+1, +1},
-        {+1, +1},
+		{+1, +1},
 		{+1, +1},
 		{+1, +1},
 		{+1, +1},
@@ -402,7 +404,7 @@ void cAgipdReader::maxAllFrames(void)
 
 	for (int n = 0; n < nAGIPDmodules; n++)
 	{
-		float *sumPointer = &sumdata[0] + (pdata[n] - pdata[0]);
+		float *sumPointer = &pngData[0] + (pdata[n] - pdata[0]);
 		int cornerX = roughPos[n][0];
 		int cornerY = roughPos[n][1];
 		int xDir = axisDir[n][0];
@@ -411,37 +413,7 @@ void cAgipdReader::maxAllFrames(void)
 		if (xDir == -1) cornerX += modulen[1];
 		if (yDir == -1) cornerY += modulen[0];
 
-		int rawCornerX = 0;
-		int rawCornerY = n * modulen[1];
-
-		std::cout << "agipd" << i_to_str(n) << "/min_fs = " + i_to_str(rawCornerX) << std::endl;
-		std::cout << "agipd" << i_to_str(n) << "/min_ss = " + i_to_str(rawCornerY) << std::endl;
-		std::cout << "agipd" << i_to_str(n) << "/max_fs = " + i_to_str(rawCornerX + n0) << std::endl;
-		std::cout << "agipd" << i_to_str(n) << "/max_ss = " + i_to_str(rawCornerY + modulen[1]) << std::endl;
-		std::cout << "agipd" << i_to_str(n) << "/fs = ";
-		if (xDir == -1)
-		{
-			std::cout << "-1.000x -1.000y" << std::endl;
-		}
-		else
-		{
-			std::cout << "+1.000x +1.000y" << std::endl;
-		}
-
-		std::cout << "agipd" << i_to_str(n) << "/ss = ";
-
-		if (yDir == -1)
-		{
-			std::cout << "-1.000x -1.000y" << std::endl;
-		}
-		else
-		{
-			std::cout << "+1.000x +1.000y" << std::endl;
-		}
-
-
-		std::cout << "agipd" << i_to_str(n) << "/corner_x = " + i_to_str(cornerX) << std::endl;
-		std::cout << "agipd" << i_to_str(n) << "/corner_y = " + i_to_str(cornerY) << std::endl;
+		int rawCornerY = n * (int)modulen[1];
 
 		for (int i = 0; i < modulen[0]; i++)
 		{
@@ -462,9 +434,70 @@ void cAgipdReader::maxAllFrames(void)
 		png.drawText("do not use for any real analysis", 0, 0);
 	}
 
-
 	png.writeImageOutput();
 
 	std::cout << "Pixel stdev: " << stdev << std::endl;
 	std::cout << "Mean pixel value: " << mean << std::endl;
+
+}
+
+void cAgipdReader::maxAllFrames(void)
+{
+	// Array for storying sum of all frames
+	float *sumdata;
+
+	std::cout << "Writing out max of all frames..." << std::endl;
+
+	sumdata = (float*) malloc(nn*sizeof(float));
+	memset(sumdata, 0, sizeof(float)*nn);
+
+	nextFrame();
+	std::cout << "First pixel is: " << data[0] << std::endl;
+	resetCurrentFrame();
+
+	cellAveData = (float **)malloc(sizeof(float *) * maxCell);
+	cellAveCounts = (int **)malloc(sizeof(int *) * maxCell);
+
+	for (int i = 0; i < maxCell; i++)
+	{
+		cellAveData[i] = (float *)malloc(sizeof(float) * nn);
+		cellAveCounts[i] = (int *)malloc(sizeof(int) * nn);
+
+		memset(cellAveData[i], 0, sizeof(float) * nn);
+		memset(cellAveCounts[i], 0, sizeof(int) * nn);
+	}
+
+	while (nextFrame())
+	{
+		for (int j = 0; j < nn; j++)
+		{
+			// which module?
+
+			int currentModule = (int)nn / modulenn;
+			int currentCell = cellID[currentModule];
+
+			if (data[j] > sumdata[j])
+			{
+				sumdata[j] = data[j];
+			}
+
+			cellAveData[currentCell][j] += data[j];
+			cellAveCounts[currentCell][j]++;
+		}
+	}
+
+	for (int i = 0; i < maxCell; i++)
+	{
+		for (int j = 0; j < nn; j++)
+		{
+			cellAveData[i][j] /= cellAveCounts[i][j];
+		}
+
+		writePNG(cellAveData[i], "ave_agipd_cell_" + i_to_str(i));
+	}
+}
+
+float *cAgipdReader::getCellAverage(int i)
+{
+	return cellAveData[i];
 }
