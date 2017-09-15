@@ -39,6 +39,7 @@ class AGIPD_Combiner():
                         module_nframes[i] += f[dset_name].shape[0] / 60 * len(self.good_cells)
                         if i == 0:
                             self.nframes_list.append(f[dset_name].shape[0])
+                        dset_name = '/INSTRUMENT/SPB_DET_AGIPD1M-1/DET/%dCH0:xtdf/image/trainId'%i
                     except KeyError:
                         print(fname)
                         raise
@@ -58,7 +59,8 @@ class AGIPD_Combiner():
             return
         
         cell_ind = num % len(self.good_cells)
-        ind = self.good_cells[cell_ind] + num * 60
+        train_ind = num // 60
+        ind = self.good_cells[cell_ind] + train_ind * 60
         
         file_num = np.where(ind < self.nframes_list)[0][0]
         if file_num == 0:
