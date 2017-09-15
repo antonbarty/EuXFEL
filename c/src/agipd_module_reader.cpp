@@ -12,6 +12,7 @@
 #include <hdf5.h>
 #include <hdf5_hl.h>
 #include <sstream>
+#include "PNGFile.h"
 
 #include "agipd_read.h"
 
@@ -76,6 +77,7 @@ cAgipdModuleReader::cAgipdModuleReader(void){
 };
 
 cAgipdModuleReader::~cAgipdModuleReader(){
+	stc::cout << "\tModule destructor called" << std::endl;
 	close();
 };
 
@@ -159,8 +161,10 @@ void cAgipdModuleReader::open(char filename[], int mNum){
 		std::cout << h5_image_status_field << std::endl;
 	}
 
+	std::string baseName = getBaseFilename(cAgipdModuleReader::filename);
+
 	// filename starts with 'RAW_' we have raw data
-	if(cAgipdModuleReader::filename.substr(0,3) == "RAW") {
+	if(baseName.substr(0,3) == "RAW") {
 		std::cout << "\tData is RAW detector data" << std::endl;
 		rawDetectorData = true;
 	}
@@ -211,53 +215,58 @@ void cAgipdModuleReader::open(char filename[], int mNum){
 
 
 void cAgipdModuleReader::close(void){
+	if(data==NULL)
+		return;
+	if(h5_file_id==NULL)
+		return;
+	
 
 	if(verbose) {
 		std::cout << "\tClosing " << filename << "\n";
 	}
 
 	// Free array memory
-	free(pulseIDlist);
-	free(trainIDlist);
-	free(cellIDlist);
-	free(statusIDlist);
-	free(data);
-	free(digitalGain);
-	
-	// Pointers to NULL
-	pulseIDlist = NULL;
-	trainIDlist = NULL;
-	cellIDlist = NULL;
-	statusIDlist = NULL;
-	data = NULL;
-	digitalGain = NULL;
-
-	
-	// Return quetly if there is nothing more to do
-	if (h5_file_id == 0)
-		return;
-	
-	// Cleanup stale IDs
-	hid_t ids[256];
-	long n_ids = H5Fget_obj_ids(h5_file_id, H5F_OBJ_ALL, 256, ids);
-	for (long i=0; i<n_ids; i++ ) {
-		hid_t id;
-		H5I_type_t type;
-		id = ids[i];
-		type = H5Iget_type(id);
-		if ( type == H5I_GROUP )
-			H5Gclose(id);
-		if ( type == H5I_DATASET )
-			H5Dclose(id);
-		if ( type == H5I_DATASPACE )
-			H5Sclose(id);
-		if ( type == H5I_DATATYPE )
-			H5Dclose(id);
+	if(data != NULL) {
+		free(pulseIDlist);
+		free(trainIDlist);
+		free(cellIDlist);
+		free(statusIDlist);
+		free(data);
+		free(digitalGain);
+		
+		// Pointers to NULL
+		pulseIDlist = NULL;
+		trainIDlist = NULL;
+		cellIDlist = NULL;
+		statusIDlist = NULL;
+		data = NULL;
+		digitalGain = NULL;
 	}
+	
+	
+	if (h5_file_id != 0) {
+		// Cleanup stale IDs
+		hid_t ids[256];
+		long n_ids = H5Fget_obj_ids(h5_file_id, H5F_OBJ_ALL, 256, ids);
+		for (long i=0; i<n_ids; i++ ) {
+			hid_t id;
+			H5I_type_t type;
+			id = ids[i];
+			type = H5Iget_type(id);
+			if ( type == H5I_GROUP )
+				H5Gclose(id);
+			if ( type == H5I_DATASET )
+				H5Dclose(id);
+			if ( type == H5I_DATASPACE )
+				H5Sclose(id);
+			if ( type == H5I_DATATYPE )
+				H5Dclose(id);
+		}
 
-	// Close HDF5 file
-	H5Fclose(h5_file_id);
-	h5_file_id = 0;
+		// Close HDF5 file
+		H5Fclose(h5_file_id);
+		h5_file_id = 0;
+	}
 };
 // cAgipdReader::close
 

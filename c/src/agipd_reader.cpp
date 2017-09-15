@@ -32,6 +32,8 @@ cAgipdReader::cAgipdReader(void){
 
 cAgipdReader::~cAgipdReader()
 {
+	stc::cout << "\tAGIPD destructor called" << std::endl;
+
 	if(data == NULL)
 		return;
 	close();
@@ -251,15 +253,18 @@ void cAgipdReader::close(void){
 		std::cout << "\tClosing " << moduleFilename[i] << std::endl;
 		module[i].close();
 	}
+	std::cout << "\t" << nAGIPDmodules << " module elements closed " << std::endl;
 	
 	// Clean up memory
-	free(data);
-	free(mask);
-	free(digitalGain);
-	data = NULL;
-	mask = NULL;
-	digitalGain = NULL;
-
+	if(data != NULL) {
+		free(data);
+		free(mask);
+		free(digitalGain);
+		data = NULL;
+		mask = NULL;
+		digitalGain = NULL;
+	}
+	std::cout << "\tAGIPD reader closed " << std::endl;
 }
 // cAgipdReader::close()
 
@@ -329,6 +334,11 @@ bool cAgipdReader::readFrame(long trainID, long pulseID)
 
 	std::cout << "Read train " << trainID << ", pulse " << pulseID << " with "
 	<< moduleCount << " modules." << std::endl;
+
+	
+	currentTrain = trainID;
+	currentPulse = pulseID;
+	currentCell = module[0].cellID;
 
 	return true;
 }

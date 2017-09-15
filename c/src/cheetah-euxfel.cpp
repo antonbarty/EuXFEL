@@ -74,24 +74,26 @@ int main(int argc, char* argv[]) {
 	
 	
 	// Initialise AGIPD frame reading stuff
-	cAgipdReader agipd;
-	agipd.verbose=1;
 
 	// Loop through all listed *AGIPD00*.h5 files
 	for(long fnum=0; fnum < CheetahEuXFELparams.inputFiles.size(); fnum++) {
+		cAgipdReader agipd;
+		agipd.verbose=1;
 
+		// Add code to deduce run number from filename
+		int runNumber;
+		
+		
 		// Open the file
 		std::cout << "Opening " << CheetahEuXFELparams.inputFiles[fnum] << std::endl;
 		agipd.open((char *)CheetahEuXFELparams.inputFiles[fnum].c_str());
 		
 		// Process frames in this file
 		std::cout << "Reading individual frames\n";
-
 		while (agipd.nextFrame()) {
 			
-			// Read the data frame
-//			agipd.readFrame(i);
-
+			// Add more sensible event name
+			
 			cEventData * eventData = cheetahNewEvent(&cheetahGlobal);
 			eventData->frameNumber = frameNumber;
 			strcpy(eventData->eventname,CheetahEuXFELparams.inputFiles[fnum].c_str());
@@ -102,7 +104,14 @@ int main(int argc, char* argv[]) {
 			eventData->photonEnergyeV = cheetahGlobal.defaultPhotonEnergyeV;
 			eventData->wavelengthA = 0;
 			eventData->pGlobal = &cheetahGlobal;
+			eventData->detectorZ = 15e-3;
 			
+			// Add train and pulse ID to event data.
+			eventData->trainID = 0;
+			eventData->pulseID = 0;
+			eventData->cellID = 0;
+			
+			// Check image dimensions
 			int detId = 0;
 			if (agipd.n0 != cheetahGlobal.detector[detId].pix_nx || agipd.n1 != cheetahGlobal.detector[detId].pix_ny) {
 				printf("Error: File image dimensions of %zu x %zu did not match detector dimensions of %li x %li\n", agipd.n0, agipd.n1, eventData->pGlobal->detector[detId].pix_nx, eventData->pGlobal->detector[detId].pix_ny);
