@@ -15,6 +15,7 @@ good_cells = [4,8,12,16,20,24,28]
 f = h5py.File(calibration_file)
 out_f = h5py.File(sys.argv[1])
 out_f['input_calibration'] = calibration_file
+out_f['good_cells'] = good_cells
 out_f.create_dataset('offsets', (16,128,512,len(good_cells)),dtype='uint16')
 
 module = 0
