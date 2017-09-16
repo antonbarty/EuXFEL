@@ -1,11 +1,11 @@
 # Description of the EuXFEL Raw data format
 
 The raw data is written in multiple files separated by detector and sliced up
-in 250 trains per file at the moment. For example RAW-R0040-AGIPD04-S00004.h5
+in 250 trains per file at the moment. For example `RAW-R0040-AGIPD04-S00004.h5`
 corresponds to run 40, detector module 4 and slice 4.
 
 The detector data inside the hdf5 files is in a group with a name that depends
-on the detector module. For example RAW-R0040-AGIPD04-S00004.h5 will have the
+on the detector module. For example `RAW-R0040-AGIPD04-S00004.h5` will have the
 data in the group `/INSTRUMENT/SPB_DET_AGIPD1M-1/DET/4CH0:xtdf/image/data` while
 `RAW-R0040-AGIPD10-S00004.h5` will have the data in
 `/INSTRUMENT/SPB_DET_AGIPD1M-1/DET/10CH0:xtdf/image/data`. In general is has the
