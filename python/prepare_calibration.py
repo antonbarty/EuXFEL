@@ -35,12 +35,12 @@ for i in range(16):
     f = h5py.File(offset_files[i])
     if i < 8:
         # For low module number we need to invert the 512 pixels axis
-        out_f['offset'][i,:,:,:,:] = np.tranpose(np.array(f['offset'])[:,::-1],(1,2,4,3))
-        out_f['threshold'][i,:,:,:,:] = np.tranpose(np.array(f['threshold'])[:,::-1],(1,2,4,3))
+        out_f['offset'][i,:,:,:,:] = np.transpose(np.array(f['offset'])[:,:,:,::-1],(0,1,3,2))
+        out_f['threshold'][i,:,:,:,:] = np.transpose(np.array(f['threshold'])[:,:,:,::-1],(0,1,3,2))
     else:
         # For high module number we need to invert the 128 pixels axis
-        out_f['offset'][i,:,:,:,:] = np.tranpose(np.array(f['offset'])[::-1,:],(1,2,4,3))
-        out_f['threshold'][i,:,:,:,:] = np.tranpose(np.array(f['threshold'])[::-1,:],(1,2,4,3))
+        out_f['offset'][i,:,:,:,:] = np.transpose(np.array(f['offset'])[:,:,::-1,:],(0,1,3,2))
+        out_f['threshold'][i,:,:,:,:] = np.transpose(np.array(f['threshold'])[:,:,::-1,:],(0,1,3,2))
     f.close()
 #    f = h5py.File(gain_files[i])
 #    out_f['gain'][i,:,:,:,:] = np.array(f['gain'])
