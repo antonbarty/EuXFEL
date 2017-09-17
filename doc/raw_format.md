@@ -9,7 +9,7 @@ on the detector module. For example `RAW-R0040-AGIPD04-S00004.h5` will have the
 data in the group `/INSTRUMENT/SPB_DET_AGIPD1M-1/DET/4CH0:xtdf/image/data` while
 `RAW-R0040-AGIPD10-S00004.h5` will have the data in
 `/INSTRUMENT/SPB_DET_AGIPD1M-1/DET/10CH0:xtdf/image/data`. In general is has the
-format `'/INSTRUMENT/SPB_DET_AGIPD1M-1/DET/%02dCH0:xtdf/image/data' % (module)`.
+format `'/INSTRUMENT/SPB_DET_AGIPD1M-1/DET/%2dCH0:xtdf/image/data' % (module)`.
 
 The detector data has the shape `(250*60, 2, 512, 128)`, corresponding to 250
 trains with 60 elements each. All the data in `(:,1,:,:)` is pure noise.
