@@ -64,14 +64,20 @@ class AGIPD_Combiner():
         self.nframes = module_nframes[0]
         self.nframes_list = np.cumsum(self.nframes_list)
 
-    def get_frame(self, num):
+    def _get_frame(self, num, type='frame'):
         if num > self.nframes or num < 0:
             print('Out of range')
             return
         
         cell_ind = num % len(self.good_cells)
         train_ind = num // 60
-        ind = self.good_cells[cell_ind] + train_ind * 60
+        
+        if type == 'frame':
+            ind = self.good_cells[cell_ind] + train_ind * 60
+        elif type == 'gain':
+            ind = self.good_cells[cell_ind] + train_ind * 60 + 1
+        else:
+            raise ValueError        
         
         file_num = np.where(ind < self.nframes_list)[0][0]
         if file_num == 0:
@@ -93,4 +99,11 @@ class AGIPD_Combiner():
             return self.frame
         else:
             return geom.apply_geom_ij_yx((self.x, self.y), self.frame)
+
+    def get_frame(self, num):
+        return self._get_frame(num,type='frame')
+
+    def get_gain(self, num):
+        return self._get_frame(num,type='gain')
+
 
