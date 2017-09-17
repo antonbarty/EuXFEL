@@ -12,12 +12,8 @@ class AGIPD_Combiner():
     Initially specify path to folder with raw data
     Then use get_frame(num) to get specific frame
     '''
-    def __init__(self, 
-            folder_path, 
-            verbose=0, 
-            good_cells=[4,8,12,16,20,24,28],
-            geom_fname=None,
-            offsets=None):
+    def __init__(self, folder_path, verbose=0, good_cells=[4,8,12,16,20,24,28], geom_fname=None,
+                 calib_file='/gpfs/exfel/exp/SPB/201701/p002012/scratch/filipe/offset_and_threshold.h5'):
         self.verbose = verbose
         self.good_cells = np.array(good_cells)*2
         self.geom_fname = geom_fname
@@ -26,10 +22,8 @@ class AGIPD_Combiner():
         self._make_flist(folder_path)
         self._get_nframes_list()
         self.frame = np.empty((16,512,128))
-        self.offsets = offsets
-        if self.offsets is not None:
-            assert self.offsets.shape == (len(good_cells),) + self.frame.shape
-
+        self.calib = h5py.File(calib_file,'r')
+        
     def _make_flist(self, folder_path):
         self.flist = np.array([np.sort(glob.glob('%s/RAW-*-AGIPD%.2d*.h5'%(folder_path, r))) for r in range(16)])
         try:
@@ -64,13 +58,34 @@ class AGIPD_Combiner():
         self.nframes = module_nframes[0]
         self.nframes_list = np.cumsum(self.nframes_list)
 
-    def _get_frame(self, num, type='frame'):
+    def _calibrate(self, data, gain, module, cell):        
+        data = np.float32(data)
+        high_gain = gain < self.calib['threshold'][module,0,cell,:,:]
+        low_gain = gain > self.calib['threshold'][module,1,cell,:,:]
+        medium_gain =  ~high_gain * ~low_gain
+        data -= self.calib['offset'][module,0,cell,:,:] * high_gain
+        data -= self.calib['offset'][module,1,cell,:,:] * medium_gain
+        data -= self.calib['offset'][module,2,cell,:,:] * low_gain
+        data[medium_gain] *= 45
+        data[low_gain] *= 45 * 3.8
+        data[data < -100] = 0
+        data[data > 10000] = 10000
+        return data
+
+
+    def _threshold(self, gain, module, cell):        
+        high_gain = gain < self.calib['threshold'][module,0,cell,:,:]
+        low_gain = gain > self.calib['threshold'][module,1,cell,:,:]
+        medium_gain =  ~high_gain * ~low_gain
+        return low_gain*2+medium_gain*1
+        
+    def _get_frame(self, num, type='frame', calibrate=False, threshold=False):
         if num > self.nframes or num < 0:
             print('Out of range')
             return
         
         cell_ind = num % len(self.good_cells)
-        train_ind = num // 60
+        train_ind = num // len(self.good_cells)
         
         if type == 'frame':
             ind = self.good_cells[cell_ind] + train_ind * 60
@@ -90,20 +105,24 @@ class AGIPD_Combiner():
                 continue
             with h5py.File(self.flist[i][file_num], 'r') as f:
                 dset_name = '/INSTRUMENT/SPB_DET_AGIPD1M-1/DET/%dCH0:xtdf/image/data'%i
-                self.frame[i] = f[dset_name][frame_num,0]
-        
-        if self.offsets is not None:
-            self.frame -= self.offsets[num%len(self.good_cells)]
-
+                data = f[dset_name][frame_num,0]                
+                if calibrate:
+                    data = self._calibrate(data,
+                                           f[dset_name][frame_num+1,0],
+                                           i, cell_ind)
+                if threshold:
+                    data = self._threshold(data, i, cell_ind)
+                self.frame[i] = data
         if self.geom_fname is None:
             return self.frame
         else:
             return geom.apply_geom_ij_yx((self.x, self.y), self.frame)
 
-    def get_frame(self, num):
-        return self._get_frame(num,type='frame')
+    def get_frame(self, num, calibrate=False):
+        return self._get_frame(num,type='frame', calibrate=calibrate)
 
-    def get_gain(self, num):
-        return self._get_frame(num,type='gain')
+    def get_gain(self, num, threshold=False):
+        return self._get_frame(num,type='gain', calibrate=False, threshold=threshold)
 
 
+        
