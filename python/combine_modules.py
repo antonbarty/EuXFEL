@@ -79,7 +79,10 @@ class AGIPD_Combiner():
         else:
             frame_num = ind - self.nframes_list[file_num-1]
         for i in range(16):
-            with h5py.File(self.flist[i,file_num], 'r') as f:
+            if len(self.flist[i]) == 0:
+                self.frame[i] = np.zeros_like(self.frame[0])
+                continue
+            with h5py.File(self.flist[i][file_num], 'r') as f:
                 dset_name = '/INSTRUMENT/SPB_DET_AGIPD1M-1/DET/%dCH0:xtdf/image/data'%i
                 self.frame[i] = f[dset_name][frame_num,0]
         
