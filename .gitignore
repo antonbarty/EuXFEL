@@ -1,1 +1,5 @@
+# Compiled python
 *.pyc
+
+# SLURM output files
+*.out
