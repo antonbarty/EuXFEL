@@ -48,7 +48,7 @@ class AGIPD_Combiner():
                         module_nframes[i] += f[dset_name].shape[0] / 60 * len(self.good_cells)
                         if i == 0:
                             self.nframes_list.append(f[dset_name].shape[0])
-                        dset_name = '/INSTRUMENT/SPB_DET_AGIPD1M-1/DET/%dCH0:xtdf/image/trainId'%i
+                        #dset_name = '/INSTRUMENT/SPB_DET_AGIPD1M-1/DET/%dCH0:xtdf/image/trainId'%i
                     except KeyError:
                         print(fname)
                         raise
@@ -156,12 +156,12 @@ class AGIPD_Combiner():
                 for k,cell in enumerate(self.good_cells):
                     ind = np.zeros((f[dset_name].shape[0],), dtype=np.bool)
                     ind[cell::60] = True
-                    np_powder[k,i] += f[dset_name][cell:120:60,0,:,:].mean(0)
+                    np_powder[k,i] += f[dset_name][cell::60,0,:,:].mean(0)
                     if i == 0:
                         sys.stderr.write('\rModule 0: (%d, %d)'%(j,k))
         for k in range(len(self.good_cells)):
             np_powder[k,i] /= len(self.flist[i])
-        
+
 if __name__ == '__main__':
     if len(sys.argv) < 2:
         print('Format: %s <run_number>'%sys.argv[0])
@@ -172,7 +172,10 @@ if __name__ == '__main__':
     c = AGIPD_Combiner(path, good_cells=list(range(2,30,2)))
     c.get_powder()
     
-    f = h5py.File('raw_powder_r%.4d.h5'%int(sys.argv[1]), 'w')
+    import os
+    if not os.path.isdir('data'):
+        os.mkdir('data')
+    f = h5py.File('data/raw_powder_r%.4d.h5'%int(sys.argv[1]), 'w')
     f['powder'] = c.powder
     f.close()
-        
+
