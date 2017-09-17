@@ -21,12 +21,17 @@ def slice_to_range(s):
 
 class Stream():
     
-    def __init__(self, calib_fnam, rundir, gain_factors=[1., 35., 4.2]):
+    def __init__(self, calib_fnam, run, gain_factors=[1., 45., 4.2]):
         """
         Calculate good frame indexs, find and align module filenames...
         """
+        self.rundir = '/gpfs/exfel/exp/SPB/201701/p002012/raw/r'+str(run).zfill(4)
+        
         # good pulses in train
-        self.good_pulses = np.arange(8,60,8)
+        if run < 45 :
+            self.good_pulses = np.arange(8,60,8)
+        else :
+            self.good_pulses = np.arange(4,60,4)
         
         # good pulses in file
         self.good_frames = np.array([self.good_pulses + t for t in range(0, 15000, 60)]).ravel()
@@ -36,13 +41,13 @@ class Stream():
         # (cell, gain, module, ss, fs)
         self.offset    = np.transpose(f['offset'][()],    (2, 1, 0, 3, 4)).astype(np.float32)
         # (cell, thresh, module, ss, fs)
-        self.threshold = np.transpose(f['threshold'][()], (2, 1, 0, 3, 4)).astype(np.float32)
+        self.threshold = np.transpose(f['threshold'][()], (2, 1, 0, 3, 4)).astype(np.float32) 
 
         # gain multiplication factors
         self.gain_factors = gain_factors
         
         # grab the file names for each of the modules
-        self.mod_fnams = self.get_mods(rundir)
+        self.mod_fnams = self.get_mods(self.rundir)
         
         # initialise the iterator stuff
         self.index     = 0
@@ -57,6 +62,9 @@ class Stream():
     def calibrate_frame(self, frame, gain, cell):
         """
         offset calib[mod, fs, ss, cell no.], cell no. = (i/2)%30
+        
+        cell = cell_id
+        frame = (module, ss, fs)
         """
         g0 = gain < self.threshold[cell, 0]
         g1 = (~g0) * (gain < self.threshold[cell, 1])
@@ -65,7 +73,7 @@ class Stream():
         frame[g0] -= self.offset[cell, 0][g0]
         frame[g1] -= self.offset[cell, 1][g1]
         frame[g2] -= self.offset[cell, 1][g2]
-
+        
         frame[g0] *= self.gain_factors[0]
         frame[g1] *= self.gain_factors[1]
         frame[g2] *= self.gain_factors[2]
@@ -103,10 +111,10 @@ class Stream():
     
     def get_frame(self, i):
         # file index
-        self.s_index = i // self.__len__
+        self.s_index = i // len(self.good_frames)
         
         # inter file index
-        ii           = self.good_frames[i % self.__len__]
+        ii       = self.good_frames[i % len(self.good_frames)] 
         cell_ids = np.zeros((16), dtype=np.uint8)
         
         # get the modules for this frame
@@ -115,7 +123,7 @@ class Stream():
             f = h5py.File(self.mod_fnams[m][self.s_index], 'r')
             self.frame[m] = f[DATAPATH + '/data'][ii,   0].astype(np.float32)
             self.gain[m]  = f[DATAPATH + '/data'][ii+1, 0].astype(np.float32)
-            cell_ids[m] = f[DATAPATH + '/cellId'][ii, 0]//2
+            cell_ids[m]   = f[DATAPATH + '/cellId'][ii, 0]//2
             f.close()
         
         print(ii, cell_ids[0])
@@ -126,6 +134,8 @@ class Stream():
         # calibrate the frame
         self.frame = self.calibrate_frame(self.frame, self.gain, cell_ids[0])
         
+        #return self.gain.copy()
+        #return self.threshold[cell_ids[0], 0].copy()
         return self.frame.copy()
 
         
@@ -133,14 +143,13 @@ if __name__ == '__main__':
     #calib  = h5py.File('../calibration/small_calibration.h5', 'r')['offsets'][()]
     #calib  = h5py.File('/gpfs/exfel/exp/SPB/201701/p002012/scratch/filipe/offset_and_threshold.h5', 'r')['offset'][()]
     cfnam  = '/gpfs/exfel/exp/SPB/201701/p002012/scratch/filipe/offset_and_threshold.h5'
-    rundir = '/gpfs/exfel/exp/SPB/201701/p002012/raw/r0005'
     gfnam  = '/gpfs/exfel/u/scratch/SPB/201701/p002012/amorgan/EuXFEL/agipd_hmg2_oy0_man.geom'
     
     # example
-    stream  = Stream(cfnam, rundir)
+    stream  = Stream(cfnam, 5)
 
     # assemble 100 frames (kind of slow) (event, module, ss, fs)
-    frames  = stream[:100]
+    frames  = stream[:21]
 
     # apply the geometry to each frame for viewing
     gframes = np.array([geom.apply_geom(gfnam, frame) for frame in frames])
