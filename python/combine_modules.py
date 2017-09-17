@@ -4,6 +4,8 @@ import sys
 import h5py
 import numpy as np
 import glob
+import multiprocessing as mp
+import ctypes
 import geom
 
 class AGIPD_Combiner():
@@ -22,6 +24,7 @@ class AGIPD_Combiner():
         self._make_flist(folder_path)
         self._get_nframes_list()
         self.frame = np.empty((16,512,128))
+        self.powder = None
         self.calib = h5py.File(calib_file,'r')
         
     def _make_flist(self, folder_path):
@@ -71,7 +74,6 @@ class AGIPD_Combiner():
         data[data < -100] = 0
         data[data > 10000] = 10000
         return data
-
 
     def _threshold(self, gain, module, cell):        
         high_gain = gain < self.calib['threshold'][module,0,cell,:,:]
@@ -124,5 +126,53 @@ class AGIPD_Combiner():
     def get_gain(self, num, threshold=False):
         return self._get_frame(num,type='gain', calibrate=False, threshold=threshold)
 
+    def get_powder(self):
+        if self.powder is not None:
+            print('Powder sum already calculated')
+            return self.powder
+        
+        powder_shape = (len(self.good_cells),) + self.frame.shape
+        powder = mp.Array(ctypes.c_double, len(self.good_cells)*self.frame.size)
+        jobs = []
+        for i in range(16):
+            p = mp.Process(target=self._powder_worker, args=(i, powder, powder_shape))
+            jobs.append(p)
+            p.start()
+        for j in jobs:
+            j.join()
+        sys.stderr.write('\n')
+        self.powder = np.frombuffer(powder.get_obj()).reshape(powder_shape)
+        
+        return self.powder
 
+    def _powder_worker(self, i, powder, shape):
+        dset_name = '/INSTRUMENT/SPB_DET_AGIPD1M-1/DET/%dCH0:xtdf/image/data'%i
+        np_powder = np.frombuffer(powder.get_obj()).reshape(shape)
+        
+        # For each file with module i
+        for j in range(len(self.flist[i])):
+            with h5py.File(self.flist[i][j] , 'r') as f:
+                # For each cell
+                for k,cell in enumerate(self.good_cells):
+                    ind = np.zeros((f[dset_name].shape[0],), dtype=np.bool)
+                    ind[cell::60] = True
+                    np_powder[k,i] += f[dset_name][cell:120:60,0,:,:].mean(0)
+                    if i == 0:
+                        sys.stderr.write('\rModule 0: (%d, %d)'%(j,k))
+        for k in range(len(self.good_cells)):
+            np_powder[k,i] /= len(self.flist[i])
+        
+if __name__ == '__main__':
+    if len(sys.argv) < 2:
+        print('Format: %s <run_number>'%sys.argv[0])
+        sys.exit(1)
+    path = '/gpfs/exfel/exp/SPB/201701/p002012/raw/r%.4d' % int(sys.argv[1])
+    print('Calculating powder sum from', path)
+    
+    c = AGIPD_Combiner(path, good_cells=list(range(2,30,2)))
+    c.get_powder()
+    
+    f = h5py.File('raw_powder_r%.4d.h5'%int(sys.argv[1]), 'w')
+    f['powder'] = c.powder
+    f.close()
         
