@@ -69,10 +69,10 @@ class AGIPD_Combiner():
         data -= self.calib['offset'][module,0,cell,:,:] * high_gain
         data -= self.calib['offset'][module,1,cell,:,:] * medium_gain
         data -= self.calib['offset'][module,2,cell,:,:] * low_gain
-        data[medium_gain] *= 45
-        data[low_gain] *= 45 * 3.8
+        #data[medium_gain] *= 45
+        #data[low_gain] *= 45 * 3.8
         data[data < -100] = 0
-        data[data > 10000] = 10000
+        #data[data > 10000] = 10000
         return data
 
     def _threshold(self, gain, module, cell):        
@@ -81,11 +81,13 @@ class AGIPD_Combiner():
         medium_gain =  ~high_gain * ~low_gain
         return low_gain*2+medium_gain*1
         
-    def _get_frame(self, num, type='frame', calibrate=False, threshold=False):
+    def _get_frame(self, num, type='frame', calibrate=False, threshold=False, sync=True):
         if num > self.nframes or num < 0:
             print('Out of range')
             return
         
+        if not sync:
+            shift = 0
         cell_ind = num % len(self.good_cells)
         train_ind = num // len(self.good_cells)
         
@@ -94,7 +96,7 @@ class AGIPD_Combiner():
         elif type == 'gain':
             ind = self.good_cells[cell_ind] + train_ind * 60 + 1
         else:
-            raise ValueError        
+            raise ValueError
         
         file_num = np.where(ind < self.nframes_list)[0][0]
         if file_num == 0:
@@ -107,11 +109,19 @@ class AGIPD_Combiner():
                 continue
             with h5py.File(self.flist[i][file_num], 'r') as f:
                 dset_name = '/INSTRUMENT/SPB_DET_AGIPD1M-1/DET/%dCH0:xtdf/image/data'%i
-                data = f[dset_name][frame_num,0]                
+                cell_name = '/INSTRUMENT/SPB_DET_AGIPD1M-1/DET/%dCH0:xtdf/image/cellId'%i
+                train_name = '/INSTRUMENT/SPB_DET_AGIPD1M-1/DET/%dCH0:xtdf/image/trainId'%i
+                if sync:
+                    if i == 0:
+                        trainid = f[train_name][frame_num].astype('i8')[0]
+                        shift = 0
+                    else:
+                        shift = (trainid - f[train_name][frame_num].astype('i8')[0]) * 60
+                data = f[dset_name][frame_num+shift,0]
                 if calibrate:
                     data = self._calibrate(data,
-                                           f[dset_name][frame_num+1,0],
-                                           i, cell_ind)
+                                           f[dset_name][frame_num+shift+1,0],
+                                           i, self.good_cells[cell_ind]//2)
                 if threshold:
                     data = self._threshold(data, i, cell_ind)
                 self.frame[i] = data
@@ -120,11 +130,11 @@ class AGIPD_Combiner():
         else:
             return geom.apply_geom_ij_yx((self.x, self.y), self.frame)
 
-    def get_frame(self, num, calibrate=False):
-        return self._get_frame(num,type='frame', calibrate=calibrate)
+    def get_frame(self, num, calibrate=False, sync=True):
+        return self._get_frame(num,type='frame', calibrate=calibrate, sync=sync)
 
-    def get_gain(self, num, threshold=False):
-        return self._get_frame(num,type='gain', calibrate=False, threshold=threshold)
+    def get_gain(self, num, threshold=False, sync=True):
+        return self._get_frame(num,type='gain', calibrate=False, threshold=threshold, sync=sync)
 
     def get_powder(self):
         if self.powder is not None:
