@@ -4,7 +4,7 @@ import glob
 from enum import Enum
 import geom
 
-def slice_to_range(s):
+def slice_to_range(s, l):
     if s.start is None :
         start = 0
     else :
@@ -14,24 +14,32 @@ def slice_to_range(s):
     else :
         step = s.step
     if s.stop is None :
-        stop = len(self)
+        stop = l
     else :
         stop = s.stop
     return range(start, stop, step)
 
 class Stream():
     
-    def __init__(self, calib_fnam, run, gain_factors=[1., 45., 4.2]):
+    def __init__(self, calib_fnam, run, gain_factors=[1., 45., 4.2], \
+                 good_pulses = [4,  8, 12, 16, 20, 24, 28, 32, 36, 40, 44, 48, 52, 56]):
         """
         Calculate good frame indexs, find and align module filenames...
         """
         self.rundir = '/gpfs/exfel/exp/SPB/201701/p002012/raw/r'+str(run).zfill(4)
         
         # good pulses in train
+        """
         if run < 45 :
             self.good_pulses = np.arange(8,60,8)
+        elif run >= 47 and run <= 53 :
+            self.good_pulses = np.array([4])
+        elif run >= 53 :
+            self.good_pulses = np.arange(4,60,4)
         else :
             self.good_pulses = np.arange(4,60,4)
+        """
+        self.good_pulses = np.array(good_pulses)
         
         # good pulses in file
         self.good_frames = np.array([self.good_pulses + t for t in range(0, 15000, 60)]).ravel()
@@ -86,7 +94,7 @@ class Stream():
         if type(args) == int :
             return self.get_frame(args)
         elif type(args) == slice :
-            frames = slice_to_range(args)
+            frames = slice_to_range(args, self.__len__)
             return np.array([self.get_frame(i) for i in frames])
         else :
             print('what?')
@@ -109,30 +117,38 @@ class Stream():
             mods.append(mod)
         return mods
     
-    def get_frame(self, i):
+    def get_frame(self, i, module=None, calibrate=True, sync=False):
         # file index
         self.s_index = i // len(self.good_frames)
         
         # inter file index
         ii       = self.good_frames[i % len(self.good_frames)] 
-        cell_ids = np.zeros((16), dtype=np.uint8)
+        self.cell_ids = np.zeros((16), dtype=np.uint8)
+        self.train_ids = np.zeros((16), dtype=np.uint8)
         
         # get the modules for this frame
-        for m in range(16):
+        if module == None : 
+            ms = range(16)
+        else :
+            ms = [module]
+        
+        for m in ms:
             DATAPATH = '/INSTRUMENT/SPB_DET_AGIPD1M-1/DET/%iCH0:xtdf/image' % m
             f = h5py.File(self.mod_fnams[m][self.s_index], 'r')
             self.frame[m] = f[DATAPATH + '/data'][ii,   0].astype(np.float32)
             self.gain[m]  = f[DATAPATH + '/data'][ii+1, 0].astype(np.float32)
-            cell_ids[m]   = f[DATAPATH + '/cellId'][ii, 0]//2
+            self.cell_ids[m]   = f[DATAPATH + '/cellId'][ii, 0]//2
+            self.train_ids[m]  = f[DATAPATH + '/trainId'][ii, 0]//2
             f.close()
         
-        print(ii, cell_ids[0])
-        
         # make sure the memory cell ids are all the same
-        assert(np.all(cell_ids == cell_ids[0]))
+        if sync :
+            assert(np.all(self.cell_ids  == self.cell_ids[0]))
+            assert(np.all(self.train_ids == self.train_ids[0]))
         
         # calibrate the frame
-        self.frame = self.calibrate_frame(self.frame, self.gain, cell_ids[0])
+        if calibrate :
+            self.frame = self.calibrate_frame(self.frame, self.gain, self.cell_ids[0])
         
         #return self.gain.copy()
         #return self.threshold[cell_ids[0], 0].copy()
@@ -143,13 +159,14 @@ if __name__ == '__main__':
     #calib  = h5py.File('../calibration/small_calibration.h5', 'r')['offsets'][()]
     #calib  = h5py.File('/gpfs/exfel/exp/SPB/201701/p002012/scratch/filipe/offset_and_threshold.h5', 'r')['offset'][()]
     cfnam  = '/gpfs/exfel/exp/SPB/201701/p002012/scratch/filipe/offset_and_threshold.h5'
+    #cfnam  = 'offset_and_threshold_r0091.h5'
     gfnam  = '/gpfs/exfel/u/scratch/SPB/201701/p002012/amorgan/EuXFEL/agipd_hmg2_oy0_man.geom'
     
     # example
-    stream  = Stream(cfnam, 5)
+    stream  = Stream(cfnam, 80)
 
     # assemble 100 frames (kind of slow) (event, module, ss, fs)
-    frames  = stream[:21]
+    frames  = stream[600:700]
 
     # apply the geometry to each frame for viewing
     gframes = np.array([geom.apply_geom(gfnam, frame) for frame in frames])
