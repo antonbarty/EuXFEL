@@ -1,11 +1,4 @@
 #!/usr/bin/env python
-"""
-Designed to be run with 4 cores
-everyone computes their own histograms 
-for each quadrant then we collect them
-at the end. I do not know if 2 cores 
-trying to access the same event is slow...
-"""
 
 import sys
 import os
@@ -16,10 +9,8 @@ hist_dtype   = np.uint16
 buffer_dtype = np.float32
 cspad_shape  = (16, 512, 128)
 
-
 cfnam  = '/gpfs/exfel/exp/SPB/201701/p002012/scratch/filipe/offset_and_threshold.h5'
-run    = 48
-
+run    = 50
 
 if __name__ == '__main__':
     from mpi4py import MPI
@@ -36,14 +27,19 @@ if __name__ == '__main__':
     # Actual meat
     #-----------------------------
     #frames = stream[rank:stream.__len__:size]
-    try :
-        frames = stream[rank :stream.__len__:size]
-        frames[frames<50] = 0.
-     
-        powder  = np.sum(frames, axis=0)
-    except Exception as e :
-        print(e)
-        powder = np.zeros((16, 512, 128), dtype=np.float32)
+    powder = None
+    for evt in range(rank, stream.__len__, size):
+        try :
+            frame = stream[evt]
+            frame[frame<50] = 0.
+         
+            if powder is None :
+                powder = frame.copy()
+            else :
+                powder += frame
+
+        except Exception as e :
+            print(e)
     
     comm.Reduce(powder.copy(), powder, root = 0)
 
