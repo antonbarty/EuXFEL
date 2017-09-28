@@ -65,12 +65,12 @@ class AGIPD_Combiner():
         data = np.float32(data)
         high_gain = gain < self.calib['threshold'][module,0,cell,:,:]
         low_gain = gain > self.calib['threshold'][module,1,cell,:,:]
-        medium_gain =  ~high_gain * ~low_gain
+        medium_gain =  (~high_gain) * (~low_gain)
         data -= self.calib['offset'][module,0,cell,:,:] * high_gain
         data -= self.calib['offset'][module,1,cell,:,:] * medium_gain
         data -= self.calib['offset'][module,2,cell,:,:] * low_gain
-        #data[medium_gain] *= 45
-        #data[low_gain] *= 45 * 3.8
+        data[medium_gain] *= 45
+        data[low_gain] *= 45 * 3.8
         data[data < -100] = 0
         #data[data > 10000] = 10000
         return data
