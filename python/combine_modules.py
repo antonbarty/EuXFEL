@@ -16,6 +16,7 @@ class AGIPD_Combiner():
     '''
     def __init__(self, folder_path, verbose=0, good_cells=[4,8,12,16,20,24,28], geom_fname=None,
                  calib_file='/gpfs/exfel/exp/SPB/201701/p002012/scratch/filipe/offset_and_threshold.h5'):
+        self.num_h5cells = 64
         self.verbose = verbose
         self.good_cells = np.array(good_cells)*2
         self.geom_fname = geom_fname
@@ -25,6 +26,7 @@ class AGIPD_Combiner():
         self._get_nframes_list()
         self.frame = np.empty((16,512,128))
         self.powder = None
+        self.train_ids = None
         self.calib = h5py.File(calib_file,'r')
         
     def _make_flist(self, folder_path):
@@ -40,15 +42,17 @@ class AGIPD_Combiner():
     def _get_nframes_list(self):
         module_nframes = np.zeros((16,), dtype='i4')
         self.nframes_list = []
+        self.first_module = -1
         for i in range(16):
+            if len(self.flist[i]) > 0 and self.first_module == -1:
+                self.first_module = i
             for fname in self.flist[i]:
                 with h5py.File(fname, 'r') as f:
                     try:
                         dset_name = '/INSTRUMENT/SPB_DET_AGIPD1M-1/DET/%dCH0:xtdf/image/data'%i
-                        module_nframes[i] += f[dset_name].shape[0] / 60 * len(self.good_cells)
-                        if i == 0:
+                        module_nframes[i] += f[dset_name].shape[0] / self.num_h5cells * len(self.good_cells)
+                        if i == self.first_module:
                             self.nframes_list.append(f[dset_name].shape[0])
-                        #dset_name = '/INSTRUMENT/SPB_DET_AGIPD1M-1/DET/%dCH0:xtdf/image/trainId'%i
                     except KeyError:
                         print(fname)
                         raise
@@ -57,8 +61,8 @@ class AGIPD_Combiner():
         except AssertionError:
             print('Not all modules have the same frames')
         if self.verbose > -1:
-            print('%d good frames in run' % module_nframes[0])
-        self.nframes = module_nframes[0]
+            print('%d good frames in run' % module_nframes.max())
+        self.nframes = module_nframes.max()
         self.nframes_list = np.cumsum(self.nframes_list)
 
     def _calibrate(self, data, gain, module, cell):        
@@ -81,7 +85,7 @@ class AGIPD_Combiner():
         medium_gain =  ~high_gain * ~low_gain
         return low_gain*2+medium_gain*1
         
-    def _get_frame(self, num, type='frame', calibrate=False, threshold=False, sync=True):
+    def _get_frame(self, num, type='frame', calibrate=False, threshold=False, sync=True, assemble=True):
         if num > self.nframes or num < 0:
             print('Out of range')
             return
@@ -92,9 +96,9 @@ class AGIPD_Combiner():
         train_ind = num // len(self.good_cells)
         
         if type == 'frame':
-            ind = self.good_cells[cell_ind] + train_ind * 60
+            ind = self.good_cells[cell_ind] + train_ind * self.num_h5cells
         elif type == 'gain':
-            ind = self.good_cells[cell_ind] + train_ind * 60 + 1
+            ind = self.good_cells[cell_ind] + train_ind * self.num_h5cells + 1
         else:
             raise ValueError
         
@@ -112,11 +116,11 @@ class AGIPD_Combiner():
                 cell_name = '/INSTRUMENT/SPB_DET_AGIPD1M-1/DET/%dCH0:xtdf/image/cellId'%i
                 train_name = '/INSTRUMENT/SPB_DET_AGIPD1M-1/DET/%dCH0:xtdf/image/trainId'%i
                 if sync:
-                    if i == 0:
+                    if i == self.first_module:
                         trainid = f[train_name][frame_num].astype('i8')[0]
                         shift = 0
                     else:
-                        shift = (trainid - f[train_name][frame_num].astype('i8')[0]) * 60
+                        shift = (trainid - f[train_name][frame_num].astype('i8')[0]) * self.num_h5cells
                 data = f[dset_name][frame_num+shift,0]
                 if calibrate:
                     data = self._calibrate(data,
@@ -125,16 +129,49 @@ class AGIPD_Combiner():
                 if threshold:
                     data = self._threshold(data, i, cell_ind)
                 self.frame[i] = data
-        if self.geom_fname is None:
-            return self.frame
+        if not assemble or self.geom_fname is None:
+            return np.copy(self.frame)
         else:
             return geom.apply_geom_ij_yx((self.x, self.y), self.frame)
 
-    def get_frame(self, num, calibrate=False, sync=True):
-        return self._get_frame(num,type='frame', calibrate=calibrate, sync=sync)
+    def get_ids(self):
+        if self.train_ids is not None:
+            return
+        self.train_ids = np.empty((0,), dtype='u8')
+        self.pulse_ids = np.empty((0,), dtype='u8')
+        self.cell_ids = np.empty((0,), dtype='u8')
+        for fname in self.flist[self.first_module]:
+            with h5py.File(fname, 'r') as f:
+                cell_name = '/INSTRUMENT/SPB_DET_AGIPD1M-1/DET/%dCH0:xtdf/image/cellId'%self.first_module
+                pulse_name = '/INSTRUMENT/SPB_DET_AGIPD1M-1/DET/%dCH0:xtdf/image/cellId'%self.first_module
+                train_name = '/INSTRUMENT/SPB_DET_AGIPD1M-1/DET/%dCH0:xtdf/image/trainId'%self.first_module
+                self.train_ids = np.append(self.train_ids, f[train_name][:].reshape(-1,self.num_h5cells)[:,self.good_cells].flatten())
+                self.pulse_ids = np.append(self.pulse_ids, f[pulse_name][:].reshape(-1,self.num_h5cells)[:,self.good_cells].flatten())
+                self.cell_ids = np.append(self.cell_ids, f[cell_name][:].reshape(-1,self.num_h5cells)[:,self.good_cells].flatten())
 
-    def get_gain(self, num, threshold=False, sync=True):
-        return self._get_frame(num,type='gain', calibrate=False, threshold=threshold, sync=sync)
+    def get_frame_id(self, num):
+        cell_ind = num % len(self.good_cells)
+        train_ind = num // len(self.good_cells)
+        ind = self.good_cells[cell_ind] + train_ind * self.num_h5cells
+        file_num = np.where(ind < self.nframes_list)[0][0]
+        if file_num == 0:
+            frame_num = ind 
+        else:
+            frame_num = ind - self.nframes_list[file_num-1]
+        with h5py.File(self.flist[self.first_module][file_num], 'r') as f:
+            cell_name = '/INSTRUMENT/SPB_DET_AGIPD1M-1/DET/%dCH0:xtdf/image/cellId'%self.first_module
+            pulse_name = '/INSTRUMENT/SPB_DET_AGIPD1M-1/DET/%dCH0:xtdf/image/cellId'%self.first_module
+            train_name = '/INSTRUMENT/SPB_DET_AGIPD1M-1/DET/%dCH0:xtdf/image/trainId'%self.first_module
+            train_id = f[train_name][frame_num][0]
+            pulse_id = f[pulse_name][frame_num][0]
+            cell_id = f[cell_name][frame_num][0]
+        return train_id, cell_id, pulse_id
+
+    def get_frame(self, num, calibrate=False, sync=True, assemble=True):
+        return self._get_frame(num,type='frame', calibrate=calibrate, sync=sync, assemble=assemble)
+
+    def get_gain(self, num, threshold=False, sync=True, assemble=True):
+        return self._get_frame(num,type='gain', calibrate=False, threshold=threshold, sync=sync, assemble=assemble)
 
     def get_powder(self):
         if self.powder is not None:
@@ -165,10 +202,10 @@ class AGIPD_Combiner():
                 # For each cell
                 for k,cell in enumerate(self.good_cells):
                     ind = np.zeros((f[dset_name].shape[0],), dtype=np.bool)
-                    ind[cell::60] = True
-                    np_powder[k,i] += f[dset_name][cell::60,0,:,:].mean(0)
-                    if i == 0:
-                        sys.stderr.write('\rModule 0: (%d, %d)'%(j,k))
+                    ind[cell::self.num_h5cells] = True
+                    np_powder[k,i] += f[dset_name][cell::self.num_h5cells,0,:,:].mean(0)
+                    if i == self.first_module:
+                        sys.stderr.write('\rModule %d: (%d, %d)'%(i,j,k))
         for k in range(len(self.good_cells)):
             np_powder[k,i] /= len(self.flist[i])
 
