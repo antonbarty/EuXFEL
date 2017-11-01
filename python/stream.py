@@ -21,7 +21,7 @@ def slice_to_range(s, l):
 
 class Stream():
     
-    def __init__(self, calib_fnam, run, gain_factors=[1., 45., 4.2], \
+    def __init__(self, calib_fnam, run, mask_fnam = None, gain_factors=[1., 45., 45. * 4.2], \
                  good_pulses = [4,  8, 12, 16, 20, 24, 28, 32, 36, 40, 44, 48, 52, 56]):
         """
         Calculate good frame indexs, find and align module filenames...
@@ -29,20 +29,18 @@ class Stream():
         self.rundir = '/gpfs/exfel/exp/SPB/201701/p002012/raw/r'+str(run).zfill(4)
         
         # good pulses in train
-        """
-        if run < 45 :
-            self.good_pulses = np.arange(8,60,8)
-        elif run >= 47 and run <= 53 :
-            self.good_pulses = np.array([4])
-        elif run >= 53 :
-            self.good_pulses = np.arange(4,60,4)
-        else :
-            self.good_pulses = np.arange(4,60,4)
-        """
         self.good_pulses = np.array(good_pulses)
         
         # good pulses in file
         self.good_frames = np.array([self.good_pulses + t for t in range(0, 15000, 60)]).ravel()
+
+        if mask_fnam is not None :
+            f = h5py.File(mask_fnam)
+            #self.mask = np.transpose(f['mask'][()].astype(np.bool), (1, 0, 2, 3))
+            self.mask = ~np.transpose(f['bad_pixel_per_cell'][()].astype(np.bool), (0, 1, 2, 3))
+            f.close()
+        else : 
+            self.mask = np.ones((30, 16), dtype=np.bool)
         
         f = h5py.File(calib_fnam)
         # transpose the offsets file for easier + faster access
@@ -86,6 +84,9 @@ class Stream():
         frame[g1] *= self.gain_factors[1]
         frame[g2] *= self.gain_factors[2]
         
+        #frame[frame < 0] = 0 
+        #frame[~self.mask[cell]] = -100
+        #frame[~self.mask[cell]] = 0
         return frame
         #return g0.astype(np.float32)+2*g1.astype(np.float32)+3*g2.astype(np.float32)
     
@@ -122,8 +123,8 @@ class Stream():
         self.s_index = i // len(self.good_frames)
         
         # inter file index
-        ii       = self.good_frames[i % len(self.good_frames)] 
-        self.cell_ids = np.zeros((16), dtype=np.uint8)
+        ii             = self.good_frames[i % len(self.good_frames)] 
+        self.cell_ids  = np.zeros((16), dtype=np.uint8)
         self.train_ids = np.zeros((16), dtype=np.uint8)
         
         # get the modules for this frame
@@ -158,16 +159,19 @@ class Stream():
 if __name__ == '__main__':
     #calib  = h5py.File('../calibration/small_calibration.h5', 'r')['offsets'][()]
     #calib  = h5py.File('/gpfs/exfel/exp/SPB/201701/p002012/scratch/filipe/offset_and_threshold.h5', 'r')['offset'][()]
-    cfnam  = '/gpfs/exfel/exp/SPB/201701/p002012/scratch/filipe/offset_and_threshold.h5'
-    #cfnam  = 'offset_and_threshold_r0091.h5'
+    #cfnam  = '/gpfs/exfel/exp/SPB/201701/p002012/scratch/filipe/offset_and_threshold.h5'
+    cfnam  = 'offset_and_threshold_r0108.h5'
     gfnam  = '/gpfs/exfel/u/scratch/SPB/201701/p002012/amorgan/EuXFEL/agipd_hmg2_oy0_man.geom'
+    mfnam  = 'mask.h5'
+    mfnam  = '/gpfs/exfel/u/scratch/SPB/201701/p002012/filipe/bad_pixels.h5'
+    #mfnam  = None
     
     # example
-    stream  = Stream(cfnam, 80)
+    stream  = Stream(cfnam, 100, mfnam, good_pulses = [4])
 
     # assemble 100 frames (kind of slow) (event, module, ss, fs)
     frames  = stream[600:700]
 
     # apply the geometry to each frame for viewing
-    gframes = np.array([geom.apply_geom(gfnam, frame) for frame in frames])
+    gframes = np.array([geom.apply_geom(gfnam, frame).T for frame in frames])
     
